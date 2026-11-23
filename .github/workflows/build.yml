@@ -1,0 +1,86 @@
+name: Build LocalMind Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      split_per_abi:
+        description: "Build split APKs per ABI (smaller downloads)"
+        type: boolean
+        default: false
+      run_checks:
+        description: "Run dart analyze and flutter test before building"
+        type: boolean
+        default: false
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract source zip if present
+        run: |
+          if [ ! -f "pubspec.yaml" ] && [ -f "localmind-offline-source.zip" ]; then
+            unzip -qo localmind-offline-source.zip
+          fi
+          if [ ! -f "pubspec.yaml" ]; then
+            echo "ERROR: pubspec.yaml not found. Upload localmind-offline-source.zip or the extracted project files to the repo root."
+            ls -la
+            exit 1
+          fi
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter 3.44.2
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.2"
+          channel: stable
+          cache: true
+
+      - name: Verify Flutter toolchain
+        run: flutter --version
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Generate localizations
+        run: flutter gen-l10n
+
+      - name: Run build_runner (ObjectBox / codegen)
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Run static analysis (optional)
+        if: ${{ inputs.run_checks }}
+        continue-on-error: true
+        run: dart analyze
+
+      - name: Run unit tests (optional)
+        if: ${{ inputs.run_checks }}
+        continue-on-error: true
+        run: flutter test
+
+      - name: Build Android Release APK
+        run: |
+          if [ "${{ inputs.split_per_abi }}" = "true" ]; then
+            flutter build apk --release --split-per-abi
+          else
+            flutter build apk --release
+          fi
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: localmind-offline-apk
+          path: build/app/outputs/flutter-apk/*.apk
+          if-no-files-found: error
+          retention-days: 14
