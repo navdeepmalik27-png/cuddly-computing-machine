@@ -23,7 +23,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract source zip and patch syntax error
+      - name: Extract source zip and apply build fixes
         run: |
           if [ ! -f "pubspec.yaml" ] && [ -f "localmind-offline-source.zip" ]; then
             unzip -qo localmind-offline-source.zip
@@ -35,6 +35,8 @@ jobs:
           fi
           # Fix extra closing parenthesis on line 53 of add_model_screen.dart
           sed -i 's/      \])),/      ]),/' lib/features/on_device/views/add_model_screen.dart
+          # Pin file_picker to 12.0.0-beta.6 (avoids breaking v12 stable API changes and beta.5 Kotlin bug)
+          sed -i 's/file_picker: \^12.0.0-beta.5/file_picker: 12.0.0-beta.6/' pubspec.yaml
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
